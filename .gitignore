@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+/tmp/
+outputs/
+garments/
+uploads/
+*.csv
+!prompts_example.csv
+.vercel/
+venv/
+.venv/
