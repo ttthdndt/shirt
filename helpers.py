@@ -18,26 +18,31 @@ def random_sku():
     )
 
 
-def generate_pattern(prompt):
+def generate_pattern(prompt, api_key=None):
     """
     Call the Grok image generation API and return a PIL Image.
 
     Parameters
     ----------
-    prompt : str
+    prompt  : str
+    api_key : str | None — if provided, overrides the value in config.py
 
     Returns
     -------
     PIL.Image (RGBA)
     """
+    key = api_key or GROK_API_KEY
+    if not key:
+        raise RuntimeError("No Grok API key provided. Please enter one in the UI.")
+
     resp = requests.post(
         "https://api.x.ai/v1/images/generations",
         headers={
-            "Authorization": f"Bearer {GROK_API_KEY}",
+            "Authorization": f"Bearer {key}",
             "Content-Type":  "application/json",
         },
         json={
-            "model":           GROK_MODEL,
+            "model":           GROK_MODEL,       # grok-imagine-image
             "prompt":          prompt,
             "n":               1,
             "response_format": "b64_json",
