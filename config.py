@@ -5,7 +5,7 @@ load_dotenv()
 
 # ── Grok API ──────────────────────────────────────────────────────────────────
 GROK_API_KEY = os.getenv("GROK_API_KEY", "xai-ApoeBxVHEbedVEC8U1wI0j4Kyq842XRyxCFposhTe9DisPG1JwvqIrtay6qiWrhhdJq2rVb8EDHqvkjZ")
-GROK_MODEL = "grok-imagine-image"
+GROK_MODEL   = "grok-imagine-image"
 
 # ── WordPress ─────────────────────────────────────────────────────────────────
 WP_BASE_URL = os.getenv("WP_BASE_URL", "https://motasport.com")
