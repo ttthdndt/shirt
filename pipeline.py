@@ -4,20 +4,21 @@ from helpers import generate_pattern, upload_to_wordpress, random_sku
 from image_processing import apply_pattern
 
 
-def run_pipeline(prompt_rows, garments, job):
+def run_pipeline(prompt_rows, garments, job, api_key=None):
     """
     Main pipeline: for each prompt row → generate pattern → apply to all
     garments → upload to WordPress → collect WooCommerce output rows.
 
     Parameters
     ----------
-    prompt_rows : list[dict]   — rows from the validated CSV
+    prompt_rows : list[dict]
     garments    : list[(label, PIL.Image)]
-    job         : Job          — job state object (from app.py)
+    job         : Job
+    api_key     : str | None — Grok API key from the UI (overrides config)
 
     Returns
     -------
-    list[dict]   — WooCommerce-ready rows (one per prompt)
+    list[dict]  — WooCommerce-ready rows
     """
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     output_rows = []
@@ -36,14 +37,14 @@ def run_pipeline(prompt_rows, garments, job):
         job.log(f"[{row_idx + 1}/{total}] {title}")
         job.set_progress(row_idx, total)
 
-        # ── 1. Generate pattern via Grok ─────────────────────────────────────
+        # 1. Generate pattern via Grok
         job.log("  Generating pattern via Grok...")
-        pattern = generate_pattern(prompt)
+        pattern = generate_pattern(prompt, api_key=api_key)
         pattern_path = os.path.join(OUTPUT_FOLDER, f"pattern_{row_idx+1:02d}_{safe_title}.png")
         pattern.save(pattern_path)
         job.log(f"  Pattern saved: {os.path.basename(pattern_path)}")
 
-        # ── 2. Apply to all garments + upload ─────────────────────────────────
+        # 2. Apply to all garments + upload
         uploaded_urls = []
         for g_idx, (label, garment_img) in enumerate(garments):
             if job.cancelled:
@@ -58,7 +59,7 @@ def run_pipeline(prompt_rows, garments, job):
             uploaded_urls.append(url)
             job.log(f"    → {url}")
 
-        # ── 3. Build WooCommerce row ──────────────────────────────────────────
+        # 3. Build WooCommerce row
         product_slug = title.lower().replace(" ", "-").replace(",", "")[:60]
 
         wc_row = {col: "" for col in WC_COLUMNS}
