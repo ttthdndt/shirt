@@ -24,8 +24,8 @@ def run_pipeline(prompt_rows, garments, job, api_key=None):
         job.set_progress(row_idx * 2, total * 2)
 
         # ── 1. Generate pattern ───────────────────────────────────────────────
-        job.log(f"  Generating pattern via Grok API...")
-        job.log(f"  ⏳ Waiting for response (timeout: 120s)...")
+        job.log("  Generating pattern via Grok API...")
+        job.log("  ⏳ Waiting for response (timeout: 120s)...")
         job.status_detail = "generating"
 
         try:
@@ -46,7 +46,7 @@ def run_pipeline(prompt_rows, garments, job, api_key=None):
         job.set_progress(row_idx * 2 + 1, total * 2)
         job.status_detail = "uploading"
 
-        # ── 2. Apply + upload ─────────────────────────────────────────────────
+        # ── 2. Apply + upload (with retry) ────────────────────────────────────
         uploaded_urls = []
         for g_idx, (label, garment_img) in enumerate(garments):
             if job.cancelled:
@@ -60,11 +60,17 @@ def run_pipeline(prompt_rows, garments, job, api_key=None):
             apply_pattern(garment_img, pattern, out_path)
 
             try:
-                url = upload_to_wordpress(out_path, out_filename)
+                url = upload_to_wordpress(
+                    out_path, out_filename,
+                    log=job.log,
+                    retries=3,
+                    retry_delay=5,
+                )
                 uploaded_urls.append(url)
                 job.log(f"    ✓ {url}")
             except Exception as e:
-                job.log(f"    ❌ Upload failed: {e}")
+                job.log(f"    ❌ Upload failed after retries: {e}")
+                # Continue with remaining garments — don't abort entire pipeline
 
         if job.cancelled:
             break
@@ -85,7 +91,7 @@ def run_pipeline(prompt_rows, garments, job, api_key=None):
         output_rows.append(wc_row)
 
         job.set_progress((row_idx + 1) * 2, total * 2)
-        job.log(f"  ✓ Done — {len(uploaded_urls)} images | SKU: {wc_row['SKU']}")
+        job.log(f"  ✓ Done — {len(uploaded_urls)}/8 images uploaded | SKU: {wc_row['SKU']}")
 
     job.set_progress(total * 2, total * 2)
     job.status_detail = ""
