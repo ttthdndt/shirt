@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Motasport Pattern Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #e8e8e8;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 24px 32px;
+      border-bottom: 1px solid #222;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 600; color: #fff; }
+    header span { font-size: 0.8rem; color: #666; }
+
+    main {
+      max-width: 860px;
+      margin: 48px auto;
+      padding: 0 24px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 32px;
+      border-bottom: 1px solid #222;
+    }
+    .tab {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      color: #666;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all .15s;
+    }
+    .tab.active { color: #fff; border-bottom-color: #e85d00; }
+    .tab:hover:not(.active) { color: #aaa; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: #e8e8e8;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color .15s;
+      resize: vertical;
+    }
+    input[type="text"]:focus, textarea:focus { border-color: #e85d00; }
+
+    .field { margin-bottom: 20px; }
+
+    .btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: #e85d00; color: #fff; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-outline {
+      background: none;
+      border: 1px solid #333;
+      color: #aaa;
+    }
+    .btn-outline:hover { border-color: #555; color: #fff; }
+
+    .drop-zone {
+      border: 2px dashed #2a2a2a;
+      border-radius: 8px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #e85d00;
+      background: rgba(232,93,0,.05);
+    }
+    .drop-zone p { color: #555; font-size: 0.9rem; margin-top: 8px; }
+    .drop-zone .icon { font-size: 2rem; }
+    .drop-zone.has-file { border-color: #2a6e2a; background: rgba(0,120,0,.05); }
+    .drop-zone.has-file p { color: #5cb85c; }
+
+    /* Status / results */
+    .status-box {
+      margin-top: 28px;
+      background: #1a1a1a;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 20px;
+      display: none;
+    }
+    .status-box.visible { display: block; }
+
+    .progress-bar-wrap {
+      height: 4px;
+      background: #2a2a2a;
+      border-radius: 2px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #e85d00;
+      border-radius: 2px;
+      transition: width .4s ease;
+      width: 0%;
+    }
+
+    .log {
+      font-size: 0.8rem;
+      color: #666;
+      font-family: monospace;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+    .log .ok   { color: #5cb85c; }
+    .log .err  { color: #e85d00; }
+    .log .info { color: #aaa; }
+
+    .url-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .url-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .url-item img {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 4px;
+      background: #222;
+    }
+    .url-item a {
+      color: #5b9bd5;
+      font-size: 0.8rem;
+      word-break: break-all;
+      text-decoration: none;
+    }
+    .url-item a:hover { text-decoration: underline; }
+
+    .download-row {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-green { background: rgba(92,184,92,.15); color: #5cb85c; }
+    .badge-orange { background: rgba(232,93,0,.15); color: #e85d00; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏄 Motasport Pattern Generator</h1>
+  <span>Grok API → Mask → WordPress</span>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('single')">Single Prompt</button>
+    <button class="tab" onclick="switchTab('batch')">CSV Batch</button>
+  </div>
+
+  <!-- SINGLE PROMPT PANEL -->
+  <div class="panel active" id="panel-single">
+    <div class="field">
+      <label>Pattern Prompt</label>
+      <textarea id="s-prompt" rows="3" placeholder="Tropical hibiscus flowers with palm leaves, sunset orange and teal background, seamless island pattern"></textarea>
+    </div>
+    <div class="field">
+      <label>Product Title</label>
+      <input type="text" id="s-title" placeholder="Sunset Hibiscus Tropical Pattern" />
+    </div>
+    <div class="field">
+      <label>Description (optional)</label>
+      <textarea id="s-desc" rows="3" placeholder="Product description..."></textarea>
+    </div>
+    <button class="btn btn-primary" id="s-btn" onclick="runSingle()">Generate &amp; Upload</button>
+
+    <div class="status-box" id="s-status">
+      <div class="progress-bar-wrap"><div class="progress-bar" id="s-bar"></div></div>
+      <div class="log" id="s-log"></div>
+      <div class="url-list" id="s-urls"></div>
+      <div class="download-row" id="s-dl" style="display:none">
+        <button class="btn btn-outline" onclick="copyUrls()">Copy All URLs</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CSV BATCH PANEL -->
+  <div class="panel" id="panel-batch">
+    <div class="field">
+      <label>Upload CSV (columns: pattern_prompt, title, description)</label>
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('csv-file').click()"
+           ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+        <div class="icon">📄</div>
+        <p id="drop-label">Click or drag &amp; drop your CSV here</p>
+        <input type="file" id="csv-file" accept=".csv" style="display:none" onchange="fileSelected(this)" />
+      </div>
+    </div>
+    <button class="btn btn-primary" id="b-btn" onclick="runBatch()" disabled>Process &amp; Download WC CSV</button>
+
+    <div class="status-box" id="b-status">
+      <div class="progress-bar-wrap"><div class="progress-bar" id="b-bar"></div></div>
+      <div class="log" id="b-log"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+  let selectedFile = null;
+  let singleUrls   = [];
+
+  function switchTab(tab) {
+    document.querySelectorAll(".tab").forEach((t, i) => {
+      t.classList.toggle("active", (i === 0 && tab === "single") || (i === 1 && tab === "batch"));
+    });
+    document.getElementById("panel-single").classList.toggle("active", tab === "single");
+    document.getElementById("panel-batch").classList.toggle("active",  tab === "batch");
+  }
+
+  // ── log helpers ────────────────────────────────────────────────────────────
+  function log(id, msg, cls="info") {
+    const el = document.getElementById(id);
+    el.innerHTML += `<div class="${cls}">${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+  function setBar(id, pct) {
+    document.getElementById(id).style.width = pct + "%";
+  }
+
+  // ── single ─────────────────────────────────────────────────────────────────
+  async function runSingle() {
+    const prompt = document.getElementById("s-prompt").value.trim();
+    const title  = document.getElementById("s-title").value.trim() || "Hawaiian Shirt Pattern";
+    const desc   = document.getElementById("s-desc").value.trim();
+
+    if (!prompt) { alert("Please enter a prompt."); return; }
+
+    const btn    = document.getElementById("s-btn");
+    const status = document.getElementById("s-status");
+    const urlDiv = document.getElementById("s-urls");
+    const dlRow  = document.getElementById("s-dl");
+
+    btn.disabled = true;
+    status.classList.add("visible");
+    urlDiv.innerHTML = "";
+    document.getElementById("s-log").innerHTML = "";
+    dlRow.style.display = "none";
+    singleUrls = [];
+    setBar("s-bar", 10);
+
+    log("s-log", `Sending prompt to Grok API...`);
+
+    try {
+      setBar("s-bar", 30);
+      const resp = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, title, description: desc })
+      });
+      setBar("s-bar", 90);
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Unknown error");
+
+      singleUrls = data.urls;
+      log("s-log", `✓ SKU: ${data.sku}`, "ok");
+      log("s-log", `✓ ${data.urls.length} images uploaded`, "ok");
+      setBar("s-bar", 100);
+
+      data.urls.forEach(url => {
+        const label = url.split("_").pop().replace(".jpg","");
+        urlDiv.innerHTML += `
+          <div class="url-item">
+            <img src="${url}" onerror="this.style.display='none'" />
+            <a href="${url}" target="_blank">${url}</a>
+            <span class="badge badge-green">${label}</span>
+          </div>`;
+      });
+
+      dlRow.style.display = "flex";
+    } catch(e) {
+      log("s-log", `✗ ${e.message}`, "err");
+      setBar("s-bar", 100);
+    }
+
+    btn.disabled = false;
+  }
+
+  function copyUrls() {
+    navigator.clipboard.writeText(singleUrls.join(","));
+    alert("URLs copied to clipboard!");
+  }
+
+  // ── batch ──────────────────────────────────────────────────────────────────
+  function dragOver(e)  { e.preventDefault(); document.getElementById("drop-zone").classList.add("dragover"); }
+  function dragLeave(e) { document.getElementById("drop-zone").classList.remove("dragover"); }
+  function dropFile(e)  {
+    e.preventDefault();
+    dragLeave(e);
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  }
+  function fileSelected(input) { if (input.files[0]) setFile(input.files[0]); }
+  function setFile(file) {
+    selectedFile = file;
+    const dz = document.getElementById("drop-zone");
+    dz.classList.add("has-file");
+    document.getElementById("drop-label").textContent = `✓ ${file.name}`;
+    document.getElementById("b-btn").disabled = false;
+  }
+
+  async function runBatch() {
+    if (!selectedFile) return;
+
+    const btn    = document.getElementById("b-btn");
+    const status = document.getElementById("b-status");
+
+    btn.disabled = true;
+    status.classList.add("visible");
+    document.getElementById("b-log").innerHTML = "";
+    setBar("b-bar", 10);
+    log("b-log", `Uploading ${selectedFile.name} for processing...`);
+
+    const form = new FormData();
+    form.append("file", selectedFile);
+
+    try {
+      setBar("b-bar", 30);
+      const resp = await fetch("/api/generate-csv", { method: "POST", body: form });
+      setBar("b-bar", 90);
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || "Server error");
+      }
+
+      // Check for partial errors
+      const errs = resp.headers.get("X-Processing-Errors");
+      if (errs) log("b-log", `⚠ Partial errors: ${errs}`, "err");
+
+      // Trigger download
+      const blob = await resp.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = "output_wc.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setBar("b-bar", 100);
+      log("b-log", "✓ output_wc.csv downloaded!", "ok");
+    } catch(e) {
+      log("b-log", `✗ ${e.message}`, "err");
+      setBar("b-bar", 100);
+    }
+
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>
