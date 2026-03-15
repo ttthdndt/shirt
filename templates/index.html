@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Shirt Pattern Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #222; min-height: 100vh; }
+    header { background: #111; color: #fff; padding: 18px 32px; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    .container { max-width: 860px; margin: 40px auto; padding: 0 20px; }
+    .card { background: #fff; border-radius: 12px; padding: 28px 32px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: #111; }
+
+    .steps { display: flex; margin-bottom: 32px; }
+    .step { flex: 1; text-align: center; padding: 12px 8px; border-bottom: 3px solid #e0e0e0; color: #999; font-size: .8rem; font-weight: 500; transition: all .2s; }
+    .step.active { border-color: #111; color: #111; }
+    .step.done   { border-color: #22c55e; color: #22c55e; }
+    .step-num { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: #e0e0e0; line-height: 22px; font-size: .75rem; margin-bottom: 4px; }
+    .step.active .step-num { background: #111; color: #fff; }
+    .step.done   .step-num { background: #22c55e; color: #fff; }
+
+    .api-key-wrap { display: flex; align-items: center; gap: 10px; background: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px 14px; }
+    .api-key-wrap label { font-size: .82rem; font-weight: 600; color: #555; white-space: nowrap; }
+    .api-key-wrap input { flex: 1; border: none; background: transparent; font-size: .9rem; font-family: monospace; outline: none; color: #111; }
+    .api-key-wrap .toggle-btn { background: none; border: none; cursor: pointer; color: #888; font-size: 1rem; }
+    .api-key-hint { font-size: .78rem; color: #888; margin-top: 6px; }
+    .api-key-hint a { color: #3b82f6; }
+
+    .drop-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 36px; text-align: center; cursor: pointer; transition: border-color .2s; }
+    .drop-zone:hover, .drop-zone.drag { border-color: #111; }
+    .drop-zone input { display: none; }
+    .drop-zone p { color: #666; font-size: .9rem; margin-top: 8px; }
+    .drop-zone .icon { font-size: 2rem; }
+
+    .btn { display: inline-block; padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer; font-size: .9rem; font-weight: 600; transition: background .15s; }
+    .btn-primary { background: #111; color: #fff; }
+    .btn-primary:hover { background: #333; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-danger  { background: #ef4444; color: #fff; }
+    .btn-danger:hover  { background: #dc2626; }
+    .btn-danger:disabled { background: #f87171; cursor: not-allowed; opacity: .7; }
+    .btn-success { background: #22c55e; color: #fff; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-outline { background: transparent; color: #111; border: 2px solid #111; }
+    .btn-outline:hover { background: #f0f0f0; }
+    .btn-sm { padding: 6px 14px; font-size: .82rem; }
+
+    .alert { padding: 12px 16px; border-radius: 8px; font-size: .88rem; margin-bottom: 12px; }
+    .alert-ok    { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+    .alert-error { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
+    .alert-warn  { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
+    .alert-info  { background: #eff6ff; border: 1px solid #93c5fd; color: #1e3a8a; }
+
+    /* Diagnostics table */
+    .diag-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 12px; }
+    .diag-table th { text-align: left; padding: 8px 12px; background: #f8f8f8; font-weight: 600; }
+    .diag-table td { padding: 10px 12px; border-top: 1px solid #f0f0f0; vertical-align: top; }
+    .diag-table tr:hover td { background: #fafafa; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+    .badge-ok   { background: #dcfce7; color: #166534; }
+    .badge-fail { background: #fee2e2; color: #991b1b; }
+    .badge-skip { background: #f3f4f6; color: #6b7280; }
+    .diag-detail { font-size: .75rem; color: #888; margin-top: 3px; font-family: monospace; word-break: break-all; }
+    .env-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+    .env-item { background: #f8f8f8; border-radius: 6px; padding: 8px 12px; font-size: .8rem; }
+    .env-item span { font-weight: 700; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th { text-align: left; padding: 8px 12px; background: #f8f8f8; font-weight: 600; }
+    td { padding: 8px 12px; border-top: 1px solid #f0f0f0; }
+    tr:hover td { background: #fafafa; }
+
+    .progress-bar-wrap { background: #e5e7eb; border-radius: 999px; height: 10px; overflow: hidden; margin: 12px 0; }
+    .progress-bar { height: 100%; background: #111; border-radius: 999px; transition: width .3s ease; }
+
+    .phase-banner { display: flex; align-items: center; gap: 12px; background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; font-size: .9rem; color: #4c1d95; font-weight: 500; }
+    .phase-banner .spinner { width: 18px; height: 18px; border: 3px solid #c4b5fd; border-top-color: #7c3aed; border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+    .phase-upload { background: #eff6ff; border-color: #93c5fd; color: #1e3a8a; }
+    .phase-upload .spinner { border-color: #93c5fd; border-top-color: #2563eb; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .log-box { background: #0f172a; color: #a3e635; border-radius: 8px; padding: 16px; font-family: monospace; font-size: .78rem; height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
+    .summary-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; font-size: .84rem; }
+    .summary-card .sku   { font-weight: 700; color: #111; margin-bottom: 4px; }
+    .summary-card .title { color: #555; margin-bottom: 4px; }
+    .summary-card .imgs  { color: #22c55e; font-weight: 600; }
+    .summary-card a { color: #3b82f6; font-size: .78rem; word-break: break-all; }
+
+    .model-badge { display: inline-block; background: #ede9fe; color: #5b21b6; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+    .hidden   { display: none !important; }
+    .mt8  { margin-top: 8px; }
+    .mt16 { margin-top: 16px; }
+    .flex-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .divider  { border: none; border-top: 1px solid #f0f0f0; margin: 20px 0; }
+    .spinning { animation: spin .8s linear infinite; display: inline-block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span>👕</span>
+  <h1>Shirt Pattern Generator — WooCommerce Pipeline</h1>
+</header>
+
+<div class="container">
+
+  <div class="steps">
+    <div class="step active" id="step1"><div class="step-num">1</div><br>Setup</div>
+    <div class="step" id="step2"><div class="step-num">2</div><br>Diagnose</div>
+    <div class="step" id="step3"><div class="step-num">3</div><br>Validate CSV</div>
+    <div class="step" id="step4"><div class="step-num">4</div><br>Run</div>
+    <div class="step" id="step5"><div class="step-num">5</div><br>Download</div>
+  </div>
+
+  <!-- Step 1: API Key + Upload -->
+  <div class="card" id="card-setup">
+    <h2>1 — Grok API Key <span class="model-badge">grok-imagine-image</span></h2>
+    <div class="api-key-wrap">
+      <label for="api-key-input">xAI API Key</label>
+      <input type="password" id="api-key-input" placeholder="xai-xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false"/>
+      <button class="toggle-btn" onclick="toggleKeyVisibility()" title="Show/hide">👁</button>
+    </div>
+    <div class="api-key-hint">Get your key at <a href="https://console.x.ai" target="_blank">console.x.ai</a>. Never stored on the server.</div>
+
+    <hr class="divider"/>
+
+    <h2>Upload Prompts CSV</h2>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">📄</div>
+      <strong>Click or drag &amp; drop your CSV</strong>
+      <p>Required columns: <code>pattern_prompt</code>, <code>title</code>, <code>description</code></p>
+      <input type="file" id="file-input" accept=".csv"/>
+    </div>
+    <div id="file-name" class="mt16" style="color:#555;font-size:.88rem;"></div>
+
+    <div class="mt16">
+      <button class="btn btn-primary" id="btn-diagnose" disabled onclick="runDiagnostics()">🔍 Check Connections</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Diagnostics -->
+  <div class="card hidden" id="card-diag">
+    <h2>2 — Connection Diagnostics</h2>
+    <div id="diag-running" class="alert alert-info">
+      <span class="spinning">⚙</span> Running checks… Grok API test may take up to 60 seconds.
+    </div>
+    <div id="diag-result" class="hidden"></div>
+    <div class="mt16 hidden" id="diag-actions">
+      <button class="btn btn-primary btn-sm" onclick="runDiagnostics()">↺ Re-run checks</button>
+      <button class="btn btn-outline btn-sm" id="btn-proceed" onclick="showValidate()">Proceed to CSV Validate →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Validate CSV -->
+  <div class="card hidden" id="card-validate">
+    <h2>3 — Validate CSV</h2>
+    <div id="validation-result"></div>
+    <div class="mt16">
+      <button class="btn btn-primary" id="btn-validate" onclick="validateFile()">Validate CSV</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Run -->
+  <div class="card hidden" id="card-run">
+    <h2>4 — Run Pipeline</h2>
+    <p style="color:#555;font-size:.9rem;margin-bottom:16px;">
+      For each prompt: generate via <strong>grok-imagine-image</strong> (30–60s) → mask onto 8 garments → upload to WordPress.
+    </p>
+    <div class="flex-row">
+      <button class="btn btn-primary" id="btn-run" onclick="runPipeline()">▶ Start Pipeline</button>
+      <button class="btn btn-danger hidden" id="btn-cancel" onclick="confirmCancel()">✕ Cancel</button>
+    </div>
+    <div id="progress-section" class="hidden mt16">
+      <div id="phase-banner" class="hidden"></div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+      </div>
+      <div id="progress-label" style="font-size:.82rem;color:#555;margin-bottom:8px;"></div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- Step 5: Download -->
+  <div class="card hidden" id="card-done">
+    <h2>5 — Done!</h2>
+    <div class="alert alert-ok" id="done-alert"></div>
+    <div class="flex-row mt16">
+      <a id="btn-download" class="btn btn-success" href="#">⬇ Download output_wc.csv</a>
+      <button class="btn btn-outline" onclick="location.reload()">↺ Start Over</button>
+    </div>
+    <h2 style="margin-top:24px;">Summary</h2>
+    <div class="summary-grid" id="summary-grid"></div>
+  </div>
+
+</div>
+
+<script>
+  let selectedFile = null;
+  let currentJobId = null;
+  let pollInterval = null;
+  let isGenerating = false;
+  let diagPassed   = false;
+
+  function toggleKeyVisibility() {
+    const inp = document.getElementById("api-key-input");
+    inp.type = inp.type === "password" ? "text" : "password";
+  }
+
+  // ── File selection ─────────────────────────────────────────────────────────
+  const dropZone = document.getElementById("drop-zone");
+  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault(); dropZone.classList.remove("drag");
+    if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+  });
+  document.getElementById("file-input").addEventListener("change", e => {
+    if (e.target.files[0]) setFile(e.target.files[0]);
+  });
+
+  function setFile(f) {
+    selectedFile = f;
+    document.getElementById("file-name").textContent = `Selected: ${f.name} (${(f.size/1024).toFixed(1)} KB)`;
+    const apiKey = document.getElementById("api-key-input").value.trim();
+    document.getElementById("btn-diagnose").disabled = !apiKey;
+  }
+
+  document.getElementById("api-key-input").addEventListener("input", () => {
+    document.getElementById("btn-diagnose").disabled = !document.getElementById("api-key-input").value.trim() || !selectedFile;
+  });
+
+  // ── Diagnostics ────────────────────────────────────────────────────────────
+  async function runDiagnostics() {
+    const apiKey = document.getElementById("api-key-input").value.trim();
+    if (!apiKey || !selectedFile) { alert("Enter API key and select a CSV first."); return; }
+
+    document.getElementById("card-diag").classList.remove("hidden");
+    document.getElementById("diag-running").classList.remove("hidden");
+    document.getElementById("diag-result").classList.add("hidden");
+    document.getElementById("diag-actions").classList.add("hidden");
+    setStep(2, "active");
+
+    try {
+      const resp = await fetch("/diagnose", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({api_key: apiKey})
+      });
+      const data = await resp.json();
+      document.getElementById("diag-running").classList.add("hidden");
+      renderDiagnostics(data);
+    } catch(e) {
+      document.getElementById("diag-running").classList.add("hidden");
+      document.getElementById("diag-result").innerHTML =
+        `<div class="alert alert-error">❌ Could not reach the server: ${e.message}<br><br>
+        <strong>This is likely a Vercel issue</strong> — the serverless function may have timed out or crashed.
+        Check your Vercel function logs at vercel.com → project → Functions tab.</div>`;
+      document.getElementById("diag-result").classList.remove("hidden");
+      document.getElementById("diag-actions").classList.remove("hidden");
+    }
+  }
+
+  function renderDiagnostics(data) {
+    const el = document.getElementById("diag-result");
+    const env = data.environment || {};
+
+    let html = `<table class="diag-table">
+      <thead><tr><th>Component</th><th>Status</th><th>Message</th></tr></thead><tbody>`;
+
+    // Environment
+    html += `<tr>
+      <td><strong>Server Environment</strong></td>
+      <td><span class="badge badge-ok">OK</span></td>
+      <td>
+        Python ${(env.python||"").split(" ")[0]} |
+        /tmp writable: ${env.tmp_writable ? "✅" : "❌"}
+        <div class="diag-detail">
+          Env vars set — GROK_API_KEY: ${env.env_vars_set?.GROK_API_KEY ? "✅" : "❌ (using UI input)"}
+          | WP_APP_PASS: ${env.env_vars_set?.WP_APP_PASS ? "✅" : "❌"}
+          | WP_BASE_URL: ${env.env_vars_set?.WP_BASE_URL ? "✅" : "❌"}
+        </div>
+      </td>
+    </tr>`;
+
+    // Grok
+    const grok = data.grok || {};
+    const isNetworkBlock = ["dns_block","tcp_block","connect_timeout","connection_error"].includes(grok.cause);
+    html += `<tr>
+      <td><strong>Grok API</strong><br><small style="color:#888">grok-imagine-image</small></td>
+      <td><span class="badge ${grok.ok ? 'badge-ok' : 'badge-fail'}">${grok.ok ? "✅ OK" : "❌ FAIL"}</span></td>
+      <td>${esc(grok.message || "")}
+        ${grok.detail ? `<div class="diag-detail">${esc(grok.detail)}</div>` : ""}
+        ${isNetworkBlock ? `<div style="margin-top:8px;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:.84rem;color:#991b1b">
+          <strong>🚫 Vercel is blocking outbound requests to api.x.ai.</strong><br>
+          This is a known Vercel restriction — their serverless functions cannot reach some external APIs.<br><br>
+          <strong>Fix:</strong> Deploy this app on your <strong>Contabo VPS</strong> instead using the included
+          <code>deploy_contabo.sh</code> script. The same code works perfectly — it runs fine in Google Colab too.
+        </div>` : ""}
+      </td>
+    </tr>`;
+
+    // WordPress
+    const wp = data.wordpress || {};
+    html += `<tr>
+      <td><strong>WordPress</strong></td>
+      <td><span class="badge ${wp.ok ? 'badge-ok' : 'badge-fail'}">${wp.ok ? "✅ OK" : "❌ FAIL"}</span></td>
+      <td>${esc(wp.message || "")}
+        ${wp.detail ? `<div class="diag-detail">${esc(wp.detail)}</div>` : ""}
+      </td>
+    </tr>`;
+
+    // Garments
+    const garments = data.garments || [];
+    const gOk = garments.filter(g => g.ok).length;
+    html += `<tr>
+      <td><strong>Garment Images</strong></td>
+      <td><span class="badge ${gOk === garments.length ? 'badge-ok' : 'badge-fail'}">${gOk}/${garments.length} OK</span></td>
+      <td>${garments.map(g =>
+        `${g.ok ? "✅" : "❌"} <code style="font-size:.75rem">${esc(g.url.split("/").pop())}</code>: ${esc(g.message)}`
+      ).join("<br>")}</td>
+    </tr>`;
+
+    html += `</tbody></table>`;
+
+    // Overall verdict
+    const allOk = grok.ok && wp.ok;
+    diagPassed = allOk;
+    if (allOk) {
+      html = `<div class="alert alert-ok">✅ All systems go — ready to run the pipeline.</div>` + html;
+      setStep(2, "done");
+    } else {
+      html = `<div class="alert alert-error">❌ Some checks failed. Fix the issues above before running.</div>` + html;
+      setStep(2, "active");
+    }
+
+    el.innerHTML = html;
+    el.classList.remove("hidden");
+
+    const actions = document.getElementById("diag-actions");
+    actions.classList.remove("hidden");
+    document.getElementById("btn-proceed").disabled = !allOk;
+    document.getElementById("btn-proceed").style.opacity = allOk ? "1" : ".4";
+  }
+
+  function showValidate() {
+    document.getElementById("card-validate").classList.remove("hidden");
+    setStep(3, "active");
+    validateFile();
+  }
+
+  // ── Validate CSV ───────────────────────────────────────────────────────────
+  async function validateFile() {
+    const btn = document.getElementById("btn-validate");
+    btn.disabled = true; btn.textContent = "Validating...";
+    const fd = new FormData();
+    fd.append("file", selectedFile);
+    try {
+      const resp = await fetch("/validate", { method: "POST", body: fd });
+      const data = await resp.json();
+      renderValidation(data);
+    } catch(e) {
+      document.getElementById("validation-result").innerHTML =
+        `<div class="alert alert-error">Network error: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = "Re-validate";
+    }
+  }
+
+  function renderValidation(data) {
+    const el = document.getElementById("validation-result");
+    if (!data.ok) {
+      el.innerHTML = `<div class="alert alert-error">❌ ${esc(data.error)}</div>`;
+      setStep(3, "active"); return;
+    }
+    let html = `<div class="alert alert-ok">✅ Valid — ${data.row_count} prompt(s) found.</div>`;
+    if (data.extra?.length)
+      html += `<div class="alert alert-warn">⚠ Extra columns (ignored): ${esc(data.extra.join(", "))}</div>`;
+    html += `<table><thead><tr><th>#</th><th>Title</th><th>Prompt (preview)</th></tr></thead><tbody>`;
+    data.preview.forEach((r, i) => {
+      html += `<tr><td>${i+1}</td><td>${esc(r.title)}</td><td>${esc(r.prompt)}…</td></tr>`;
+    });
+    if (data.row_count > 5)
+      html += `<tr><td colspan="3" style="color:#999;text-align:center">… and ${data.row_count - 5} more</td></tr>`;
+    html += `</tbody></table>`;
+    el.innerHTML = html;
+    setStep(3, "done"); setStep(4, "active");
+    document.getElementById("card-run").classList.remove("hidden");
+  }
+
+  // ── Run pipeline ───────────────────────────────────────────────────────────
+  async function runPipeline() {
+    const apiKey = document.getElementById("api-key-input").value.trim();
+    if (!apiKey) { alert("No API key."); return; }
+    const fd = new FormData();
+    fd.append("file", selectedFile);
+    fd.append("api_key", apiKey);
+
+    document.getElementById("btn-run").disabled = true;
+    document.getElementById("btn-cancel").classList.remove("hidden");
+    document.getElementById("progress-section").classList.remove("hidden");
+
+    try {
+      const resp = await fetch("/run", { method: "POST", body: fd });
+      const data = await resp.json();
+      if (!data.ok) { alert(data.error); resetRunBtn(); return; }
+      currentJobId = data.job_id;
+      pollInterval = setInterval(pollStatus, 1500);
+    } catch(e) {
+      alert("Failed to start: " + e.message);
+      resetRunBtn();
+    }
+  }
+
+  async function pollStatus() {
+    if (!currentJobId) return;
+    try {
+      const resp = await fetch("/status/" + currentJobId);
+      const data = await resp.json();
+      document.getElementById("progress-bar").style.width = data.progress + "%";
+      document.getElementById("progress-label").textContent = `${data.progress}% complete`;
+      updatePhaseBanner(data.status_detail);
+      const logBox = document.getElementById("log-box");
+      logBox.textContent = data.logs.join("\n");
+      logBox.scrollTop = logBox.scrollHeight;
+      if (data.status === "done")  { clearInterval(pollInterval); showDone(data.summary); }
+      if (data.status === "error") { clearInterval(pollInterval); showError(data.error); }
+    } catch(e) {}
+  }
+
+  function updatePhaseBanner(detail) {
+    const banner    = document.getElementById("phase-banner");
+    const cancelBtn = document.getElementById("btn-cancel");
+    isGenerating    = detail === "generating";
+
+    if (detail === "generating") {
+      banner.className = "phase-banner";
+      banner.innerHTML = `<div class="spinner"></div>
+        <span><strong>Grok AI is generating the pattern…</strong>
+        Takes 30–60 seconds — Cancel is locked until it finishes.</span>`;
+      banner.classList.remove("hidden");
+      cancelBtn.disabled = true;
+      cancelBtn.textContent = "⏳ Generating…";
+    } else if (detail === "uploading") {
+      banner.className = "phase-banner phase-upload";
+      banner.innerHTML = `<div class="spinner"></div>
+        <span><strong>Uploading images to WordPress…</strong></span>`;
+      banner.classList.remove("hidden");
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = "✕ Cancel";
+    } else {
+      banner.classList.add("hidden");
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = "✕ Cancel";
+    }
+  }
+
+  async function confirmCancel() {
+    if (isGenerating) return;
+    if (!confirm("Cancel the pipeline? Progress so far will be lost.")) return;
+    if (currentJobId) await fetch("/cancel/" + currentJobId, { method: "POST" });
+    resetRunBtn();
+    updatePhaseBanner("");
+  }
+
+  function showDone(summary) {
+    setStep(4, "done"); setStep(5, "active");
+    updatePhaseBanner("");
+    document.getElementById("btn-cancel").classList.add("hidden");
+    document.getElementById("card-done").classList.remove("hidden");
+    document.getElementById("done-alert").textContent =
+      `Pipeline complete! ${summary.length} product(s) generated and uploaded.`;
+    document.getElementById("btn-download").href = "/download/" + currentJobId;
+    document.getElementById("summary-grid").innerHTML = summary.map(s => `
+      <div class="summary-card">
+        <div class="sku">${esc(s.sku)}</div>
+        <div class="title">${esc(s.title)}</div>
+        <div class="imgs">📸 ${s.image_count} images</div>
+        <a href="${esc(s.first_url)}" target="_blank">View first ↗</a>
+      </div>`).join("");
+  }
+
+  function showError(msg) {
+    resetRunBtn(); updatePhaseBanner("");
+    document.getElementById("log-box").textContent += `\n\n❌ ERROR: ${msg}`;
+  }
+
+  function resetRunBtn() {
+    document.getElementById("btn-run").disabled = false;
+    document.getElementById("btn-cancel").classList.add("hidden");
+    isGenerating = false;
+  }
+
+  function setStep(n, state) {
+    document.getElementById("step" + n).className = "step " + state;
+  }
+  function esc(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+</script>
+</body>
+</html>
