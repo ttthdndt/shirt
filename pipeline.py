@@ -1,5 +1,4 @@
 import os
-import time
 from config import OUTPUT_FOLDER, WP_BASE_URL, WC_COLUMNS, WC_DEFAULTS
 from helpers import generate_pattern, upload_to_wordpress, random_sku
 from image_processing import apply_pattern
@@ -22,26 +21,32 @@ def run_pipeline(prompt_rows, garments, job, api_key=None):
 
         job.log(f"")
         job.log(f"── [{row_idx + 1}/{total}] {title}")
-        job.set_progress(row_idx * 2, total * 2)  # each prompt = 2 units (generate + upload)
+        job.set_progress(row_idx * 2, total * 2)
 
-        # ── 1. Generate pattern via Grok ─────────────────────────────────────
+        # ── 1. Generate pattern ───────────────────────────────────────────────
         job.log(f"  Generating pattern via Grok API...")
-        job.log(f"  ⏳ This may take 30–60 seconds, please wait...")
+        job.log(f"  ⏳ Waiting for response (timeout: 120s)...")
         job.status_detail = "generating"
 
-        pattern = generate_pattern(prompt, api_key=api_key)
+        try:
+            pattern = generate_pattern(prompt, api_key=api_key, log=job.log)
+        except Exception as e:
+            job.log(f"  ❌ Generation failed: {e}")
+            job.status    = "error"
+            job.error_msg = str(e)
+            return output_rows
 
         if job.cancelled:
-            job.log("  Cancelled after generation — skipping upload.")
+            job.log("  Cancelled after generation.")
             break
 
         pattern_path = os.path.join(OUTPUT_FOLDER, f"pattern_{row_idx+1:02d}_{safe_title}.png")
         pattern.save(pattern_path)
-        job.log(f"  ✓ Pattern generated & saved.")
+        job.log(f"  ✓ Pattern saved.")
         job.set_progress(row_idx * 2 + 1, total * 2)
         job.status_detail = "uploading"
 
-        # ── 2. Apply to all garments + upload ─────────────────────────────────
+        # ── 2. Apply + upload ─────────────────────────────────────────────────
         uploaded_urls = []
         for g_idx, (label, garment_img) in enumerate(garments):
             if job.cancelled:
@@ -53,14 +58,18 @@ def run_pipeline(prompt_rows, garments, job, api_key=None):
 
             job.log(f"  [{g_idx+1}/{len(garments)}] {label} — masking + uploading...")
             apply_pattern(garment_img, pattern, out_path)
-            url = upload_to_wordpress(out_path, out_filename)
-            uploaded_urls.append(url)
-            job.log(f"    ✓ {url}")
+
+            try:
+                url = upload_to_wordpress(out_path, out_filename)
+                uploaded_urls.append(url)
+                job.log(f"    ✓ {url}")
+            except Exception as e:
+                job.log(f"    ❌ Upload failed: {e}")
 
         if job.cancelled:
             break
 
-        # ── 3. Build WooCommerce row ──────────────────────────────────────────
+        # ── 3. WooCommerce row ────────────────────────────────────────────────
         product_slug = title.lower().replace(" ", "-").replace(",", "")[:60]
         wc_row = {col: "" for col in WC_COLUMNS}
         wc_row.update(WC_DEFAULTS)
@@ -76,7 +85,7 @@ def run_pipeline(prompt_rows, garments, job, api_key=None):
         output_rows.append(wc_row)
 
         job.set_progress((row_idx + 1) * 2, total * 2)
-        job.log(f"  ✓ Done — {len(uploaded_urls)} images uploaded | SKU: {wc_row['SKU']}")
+        job.log(f"  ✓ Done — {len(uploaded_urls)} images | SKU: {wc_row['SKU']}")
 
     job.set_progress(total * 2, total * 2)
     job.status_detail = ""

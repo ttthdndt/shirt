@@ -1,53 +1,72 @@
 import requests
 import base64
-from io import BytesIO
+import socket
 
 
 def check_grok_api(api_key):
-    """Test Grok API with a tiny prompt. Returns dict with ok, status, message, detail."""
+    """Test Grok API — distinguishes network block vs auth error vs model error."""
     if not api_key:
         return {"ok": False, "message": "No API key provided.", "detail": ""}
+
+    # Step 1: DNS resolution
+    try:
+        ip = socket.gethostbyname("api.x.ai")
+    except socket.gaierror as e:
+        return {
+            "ok": False,
+            "message": "DNS failed: cannot resolve api.x.ai — this server cannot reach the Grok API at all.",
+            "detail": f"socket.gaierror: {e}\n→ This is a Vercel network restriction. Deploy on a VPS instead.",
+            "cause": "dns_block"
+        }
+
+    # Step 2: TCP connect
+    try:
+        s = socket.create_connection(("api.x.ai", 443), timeout=5)
+        s.close()
+    except (socket.timeout, ConnectionRefusedError, OSError) as e:
+        return {
+            "ok": False,
+            "message": "TCP connect to api.x.ai:443 failed — outbound HTTPS is blocked.",
+            "detail": f"{type(e).__name__}: {e}\n→ This is a Vercel network restriction. Deploy on a VPS instead.",
+            "cause": "tcp_block"
+        }
+
+    # Step 3: Actual API call with short timeout
     try:
         resp = requests.post(
             "https://api.x.ai/v1/images/generations",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "grok-imagine-image", "prompt": "a red dot", "n": 1, "response_format": "b64_json"},
-            timeout=90,
+            json={"model": "grok-imagine-image", "prompt": "a red circle", "n": 1, "response_format": "b64_json"},
+            timeout=(5, 30),
         )
-        data = resp.json()
-        if resp.status_code == 401:
-            return {"ok": False, "message": "Invalid API key (401 Unauthorized).", "detail": str(data)}
-        if resp.status_code == 403:
-            return {"ok": False, "message": "API key has no permission for image generation (403).", "detail": str(data)}
-        if resp.status_code == 429:
-            return {"ok": False, "message": "Rate limit hit (429). Try again in a moment.", "detail": str(data)}
-        if "error" in data:
-            return {"ok": False, "message": f"Grok error: {data['error']}", "detail": str(data)}
-        if "data" not in data or not data["data"]:
-            return {"ok": False, "message": "Grok returned no image data.", "detail": str(data)}
-
-        # Try to decode the image
-        item = data["data"][0]
-        if "b64_json" in item:
-            img_bytes = base64.b64decode(item["b64_json"])
-        elif "url" in item:
-            img_bytes = requests.get(item["url"], timeout=30).content
-        else:
-            return {"ok": False, "message": "Unknown response format from Grok.", "detail": str(data)}
-
-        size_kb = len(img_bytes) // 1024
-        return {"ok": True, "message": f"Grok OK — image received ({size_kb} KB).", "detail": ""}
-
-    except requests.exceptions.Timeout:
-        return {"ok": False, "message": "Grok API timed out after 90 seconds.", "detail": "The API may be slow or unreachable from this server."}
+    except requests.exceptions.ConnectTimeout:
+        return {"ok": False, "message": "Connect timeout (5s) — server is blocking outbound requests to api.x.ai.", "detail": "→ Deploy on a VPS instead.", "cause": "connect_timeout"}
+    except requests.exceptions.ReadTimeout:
+        return {"ok": False, "message": "Read timeout (30s) — Grok API connected but did not respond in time.", "detail": "", "cause": "read_timeout"}
     except requests.exceptions.ConnectionError as e:
-        return {"ok": False, "message": "Cannot reach api.x.ai — possible network block.", "detail": str(e)}
+        return {"ok": False, "message": f"Connection error — {e}", "detail": "→ Deploy on a VPS instead.", "cause": "connection_error"}
+
+    if resp.status_code == 401:
+        return {"ok": False, "message": "Invalid API key (401 Unauthorized).", "detail": resp.text[:200], "cause": "auth"}
+    if resp.status_code == 403:
+        return {"ok": False, "message": "API key has no image generation permission (403).", "detail": resp.text[:200], "cause": "permission"}
+    if resp.status_code == 429:
+        return {"ok": False, "message": "Rate limit hit (429).", "detail": resp.text[:200], "cause": "rate_limit"}
+    if resp.status_code != 200:
+        return {"ok": False, "message": f"HTTP {resp.status_code}", "detail": resp.text[:300], "cause": "api_error"}
+
+    try:
+        data = resp.json()
+        if "error" in data:
+            return {"ok": False, "message": f"API error: {data['error']}", "detail": "", "cause": "api_error"}
+        img_bytes = base64.b64decode(data["data"][0]["b64_json"])
+        size_kb = len(img_bytes) // 1024
+        return {"ok": True, "message": f"Grok OK — image received ({size_kb} KB).", "detail": "", "cause": ""}
     except Exception as e:
-        return {"ok": False, "message": f"Unexpected error: {type(e).__name__}", "detail": str(e)}
+        return {"ok": False, "message": f"Could not decode response: {e}", "detail": resp.text[:200], "cause": "decode_error"}
 
 
 def check_wordpress(wp_base_url, wp_username, wp_app_pass):
-    """Test WordPress REST API auth."""
     try:
         resp = requests.get(
             f"{wp_base_url.rstrip('/')}/wp-json/wp/v2/users/me",
@@ -55,39 +74,27 @@ def check_wordpress(wp_base_url, wp_username, wp_app_pass):
             timeout=15,
         )
         if resp.status_code == 200:
-            name = resp.json().get("name", "unknown")
-            return {"ok": True, "message": f"WordPress OK — logged in as '{name}'.", "detail": ""}
-        if resp.status_code == 401:
-            return {"ok": False, "message": "WordPress auth failed (401). Check username / application password.", "detail": resp.text[:200]}
-        if resp.status_code == 404:
-            return {"ok": False, "message": "WordPress REST API not found (404). Is the site URL correct?", "detail": resp.text[:200]}
-        return {"ok": False, "message": f"WordPress returned HTTP {resp.status_code}.", "detail": resp.text[:200]}
-    except requests.exceptions.ConnectionError as e:
-        return {"ok": False, "message": f"Cannot reach {wp_base_url}.", "detail": str(e)}
+            return {"ok": True, "message": f"WordPress OK — logged in as '{resp.json().get('name', '?')}'.", "detail": ""}
+        return {"ok": False, "message": f"WordPress HTTP {resp.status_code}.", "detail": resp.text[:200]}
     except Exception as e:
-        return {"ok": False, "message": f"Unexpected error: {type(e).__name__}", "detail": str(e)}
+        return {"ok": False, "message": f"Cannot reach WordPress: {e}", "detail": ""}
 
 
 def check_garments(garment_urls):
-    """Test that garment URLs are reachable."""
     results = []
     for url in garment_urls:
         try:
             resp = requests.head(url, timeout=10, allow_redirects=True)
-            if resp.status_code == 200:
-                results.append({"url": url, "ok": True, "message": "OK"})
-            else:
-                results.append({"url": url, "ok": False, "message": f"HTTP {resp.status_code}"})
+            results.append({"url": url, "ok": resp.status_code == 200, "message": f"HTTP {resp.status_code}"})
         except Exception as e:
             results.append({"url": url, "ok": False, "message": str(e)[:80]})
     return results
 
 
 def check_vercel_env():
-    """Report relevant environment info."""
     import sys, os
     return {
-        "python": sys.version,
+        "python": sys.version.split(" ")[0],
         "tmp_writable": os.access("/tmp", os.W_OK),
         "env_vars_set": {
             "GROK_API_KEY": bool(os.getenv("GROK_API_KEY")),

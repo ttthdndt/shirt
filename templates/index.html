@@ -288,14 +288,17 @@
 
     // Grok
     const grok = data.grok || {};
+    const isNetworkBlock = ["dns_block","tcp_block","connect_timeout","connection_error"].includes(grok.cause);
     html += `<tr>
       <td><strong>Grok API</strong><br><small style="color:#888">grok-imagine-image</small></td>
       <td><span class="badge ${grok.ok ? 'badge-ok' : 'badge-fail'}">${grok.ok ? "✅ OK" : "❌ FAIL"}</span></td>
       <td>${esc(grok.message || "")}
         ${grok.detail ? `<div class="diag-detail">${esc(grok.detail)}</div>` : ""}
-        ${!grok.ok ? `<div class="diag-detail" style="color:#dc2626;margin-top:4px">
-          <strong>Possible causes:</strong> Wrong API key · Model not available on your plan ·
-          Vercel cannot reach api.x.ai (network block) · API rate limit
+        ${isNetworkBlock ? `<div style="margin-top:8px;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:.84rem;color:#991b1b">
+          <strong>🚫 Vercel is blocking outbound requests to api.x.ai.</strong><br>
+          This is a known Vercel restriction — their serverless functions cannot reach some external APIs.<br><br>
+          <strong>Fix:</strong> Deploy this app on your <strong>Contabo VPS</strong> instead using the included
+          <code>deploy_contabo.sh</code> script. The same code works perfectly — it runs fine in Google Colab too.
         </div>` : ""}
       </td>
     </tr>`;
